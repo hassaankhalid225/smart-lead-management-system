@@ -1,0 +1,148 @@
+{
+  "name": "Smart Lead Management Intake Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smart-lead-intake",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "node-webhook-trigger",
+      "name": "Smart Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "smart-lead-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract lead body from webhook request\nconst lead = $json.body || {};\n\nconst formattedLead = {\n  id: lead.id || `lead_${Date.now()}`,\n  fullName: (lead.fullName || '').trim(),\n  email: (lead.email || '').trim().toLowerCase(),\n  phone: (lead.phone || '').trim(),\n  company: (lead.company || 'Not Specified').trim(),\n  requirements: (lead.message || '').trim(),\n  status: lead.status || 'New',\n  source: lead.source || 'Web Intake Form',\n  submittedAt: lead.submittedAt || new Date().toISOString(),\n  processedAt: new Date().toISOString(),\n  clientMetadata: lead.metadata || {}\n};\n\nreturn { json: formattedLead };"
+      },
+      "id": "node-format-lead",
+      "name": "Format Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Lead ID": "={{ $json.id }}",
+            "Full Name": "={{ $json.fullName }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Company": "={{ $json.company }}",
+            "Requirements": "={{ $json.requirements }}",
+            "Status": "={{ $json.status }}",
+            "Submitted At": "={{ $json.submittedAt }}",
+            "Source": "={{ $json.source }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-google-sheets",
+      "name": "Append to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Lead successfully recorded into automation pipeline!\",\n  \"leadId\": $('Format Lead Data').item.json.id,\n  \"timestamp\": $('Format Lead Data').item.json.processedAt\n}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS, GET"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization, Accept"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Smart Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
+
